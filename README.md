@@ -62,8 +62,8 @@ docker-compose -f ./docker/docker-compose.yml up --detach
 ```
 2. Once your containers have started, you can import some sample values 
 ```
-$ curl --request PUT --data-binary "@./docker/sample1.json" http://127.0.0.1:8500/v1/kv/backend
-$ curl --request PUT --data-binary "@./docker/sample2.json" http://127.0.0.1:8500/v1/kv/a/b/c/d
+curl --request PUT --data-binary "@./docker/sample1.json" http://127.0.0.1:8500/v1/kv/backend
+curl --request PUT --data-binary "@./docker/sample2.json" http://127.0.0.1:8500/v1/kv/a/b/c/d
 ```
 3. You can verify if your keys have been imported into consul by visiting `http://localhost:8500/ui/dc1/kv`
 4. Run the test `TestConsulWatcher`, without `t.Skip()` to verify
