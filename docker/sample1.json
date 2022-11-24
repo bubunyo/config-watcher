@@ -1,0 +1,9 @@
+{
+  "kafka": {
+    "hosts": [
+      "kafka-1",
+      "kafka-2",
+      "kafka-3"
+    ]
+  }
+}
