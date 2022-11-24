@@ -9,7 +9,7 @@ values.
 
 ## Usage
 
-```
+```go
 package main
 
 // Import relevant packages
