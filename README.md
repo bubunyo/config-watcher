@@ -3,15 +3,13 @@
 `config-watcher` is a simple project to watch external data stores and detect changes to keys and signal change in the
 values.
 
-## Supported Datastore
+## Supported Datastores
 
 - Consul
 
 ## Usage
 
 ```go
-package main
-
 // Import relevant packages
 import (
 	"github.com/bubunyo/config-watcher/common"
