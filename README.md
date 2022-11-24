@@ -44,10 +44,10 @@ go func() {
     }
 }()
 
-// or watch for the same key are multiple places, by calling watch with the same 
+// or watch for the same key at multiple places, by calling watch with the same 
 // key multiple times
 
-// Finally Close the watcher when shutting down
+// Finally, close the watcher when shutting down
 err := watcher.Close()
 if err != nil ...
 ```
