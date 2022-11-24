@@ -9,51 +9,49 @@ values.
 
 ## Usage
 
-```go
+```
 package main
 
+// Import relevant packages
 import (
 	"github.com/bubunyo/config-watcher/common"
 	"github.com/bubunyo/config-watcher/consul"
 )
 
-func main() {
 
-	// Setup Datastore configurations
-	config := &consul.Config{
-		Address: "localhost:8500", // Consul address
-		Config: common.Config{
-			PollInterval: 1 * time.Second, // Polling Interval
-			CloseTimeout: 5 * time.Second, // Close Timeout
-		},
-	}
-
-	// Create consul watcher
-	watcher, err := consul.NewWatcher(config)
-	if err != nil ...
-
-	// Watch for changes by calling Wact(context, key) which returns a chanl of type []byte.
-	// Values are sent down the chanl only when changes are detected
-	// You can also watch for multiple keys on the same watcher
-	go func() {
-		for byteSlice := range watcher.Watch(context.Background(), "a/b/c/d") {
-			// use byteSlice	
-		}
-	}()
-	go func() {
-		for byteSlice := range watcher.Watch(context.Background(), "test_key") {
-			// use byteSlice	
-		}
-	}()
-
-	// or watch for the same key are multiple places, by calling watch with the same 
-	// key multiple times
-
-	// Finally Close the watcher when shutting down
-	err := watcher.Close()
-	if err != nil ...
-
+// Setup Datastore configurations
+config := &consul.Config{
+    Address: "localhost:8500", // Consul address
+    Config: common.Config{
+        PollInterval: 1 * time.Second, // Polling Interval
+        CloseTimeout: 5 * time.Second, // Close Timeout
+    },
 }
+
+// Create consul watcher
+watcher, err := consul.NewWatcher(config)
+if err != nil ...
+
+// Watch for changes by calling Wact(context, key) which returns a chanl of type []byte.
+// Values are sent down the chanl only when changes are detected
+// You can also watch for multiple keys on the same watcher
+go func() {
+    for byteSlice := range watcher.Watch(context.Background(), "a/b/c/d") {
+        // use byteSlice	
+    }
+}()
+go func() {
+    for byteSlice := range watcher.Watch(context.Background(), "test_key") {
+        // use byteSlice	
+    }
+}()
+
+// or watch for the same key are multiple places, by calling watch with the same 
+// key multiple times
+
+// Finally Close the watcher when shutting down
+err := watcher.Close()
+if err != nil ...
 ```
 
 ## Testing Consul Integration
