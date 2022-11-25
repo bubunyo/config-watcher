@@ -6,6 +6,9 @@ values.
 ## Supported Datastores
 
 - Consul
+- Redis [Todo]
+- Aerospike [Todo]
+- Postgres [Todo]
 
 ## Usage
 

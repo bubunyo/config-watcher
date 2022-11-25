@@ -1,21 +1,27 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bubunyo/config-watcher/common"
 	"log"
 	"net/http"
-	"reflect"
 	"sync"
 	"time"
+
+	"github.com/bubunyo/config-watcher/common"
 )
 
+type Store interface {
+	Get(context.Context, string) ([]byte, error)
+}
+
 type watchStore struct {
-	key       string
-	sig       []chan []byte
-	lastValue []byte
+	key          string
+	sig          []chan []byte
+	lastValue    []byte
+	lastValueSet bool
 }
 
 type Watch struct {
@@ -68,7 +74,7 @@ func (w *Watch) Watch(ctx context.Context, key string) <-chan []byte {
 	} else {
 		ws = &watchStore{
 			key: key,
-			sig: make([]chan []byte, 0),
+			sig: make([]chan []byte, 0, 1),
 		}
 		ws.sig = append(ws.sig, sig)
 		w.watchStore[key] = ws
@@ -107,12 +113,11 @@ func (w *Watch) watch(ctx context.Context, ws *watchStore) error {
 		w.logger.Print(fmt.Sprintf("get value error. key=%s, err=%s", ws.key, err.Error()))
 		return err
 	}
-	if value == nil {
-		w.logger.Print(fmt.Sprintf("get value error. key=%s, err=value is nil", ws.key))
-		return err
-	}
-	if ws.lastValue == nil || different(ws.lastValue, value) {
+	if !ws.lastValueSet || ws.lastValue == nil || different(ws.lastValue, value) {
 		ws.lastValue = value
+		if !ws.lastValueSet {
+			ws.lastValueSet = true
+		}
 		for _, s := range ws.sig {
 			s <- ws.lastValue
 		}
@@ -120,8 +125,8 @@ func (w *Watch) watch(ctx context.Context, ws *watchStore) error {
 	return nil
 }
 
-func different(i1, i2 any) bool {
-	return !reflect.DeepEqual(i1, i2)
+func different(i1, i2 []byte) bool {
+	return !bytes.Equal(i1, i2)
 }
 
 func (w *Watch) Close() error {

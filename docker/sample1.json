@@ -1,6 +1,15 @@
 {
-  "kafka": {
-    "hosts": [
+  "aerospike": {
+    "timeout": "300ms",
+    "host": [
+      "aero-1",
+      "aero-2",
+      "aero-3"
+    ]
+  },
+  "kakfa": {
+    "timeout": "500ms",
+    "host": [
       "kafka-1",
       "kafka-2",
       "kafka-3"

@@ -9,6 +9,11 @@ import (
 	"net/http"
 )
 
+type Config struct {
+	common.Config
+	Address string
+}
+
 type Consul struct {
 	kv *api.KV
 }
