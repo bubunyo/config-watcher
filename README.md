@@ -73,5 +73,4 @@ curl --request PUT --data-binary "@./docker/sample2.json" http://127.0.0.1:8500/
 
 ## Todo
 
-- Add Documentations
 - Export Metrics
