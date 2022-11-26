@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -15,6 +16,12 @@ import (
 
 type Store interface {
 	Get(context.Context, string) ([]byte, error)
+}
+
+type Watcher interface {
+	io.Closer
+
+	Watch(context.Context, string) <-chan []byte
 }
 
 type watchStore struct {
@@ -110,7 +117,6 @@ func (w *Watch) runWatcher(ctx context.Context, ws *watchStore) {
 func (w *Watch) watch(ctx context.Context, ws *watchStore) error {
 	value, err := w.store.Get(ctx, ws.key)
 	if err != nil {
-		w.logger.Print(fmt.Sprintf("get value error. key=%s, err=%s", ws.key, err.Error()))
 		return err
 	}
 	if !ws.lastValueSet || ws.lastValue == nil || different(ws.lastValue, value) {

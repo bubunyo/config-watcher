@@ -11,6 +11,7 @@ import (
 )
 
 func TestConsulWatcher(t *testing.T) {
+	t.Skip()
 	config := &consul.Config{
 		Address: "localhost:8500",
 		Config: common.Config{

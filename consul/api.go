@@ -18,7 +18,7 @@ type Consul struct {
 	kv *api.KV
 }
 
-func NewWatcher(c *Config) (common.Watcher, error) {
+func NewWatcher(c *Config) (internal.Watcher, error) {
 	client, err := api.NewClient(&api.Config{
 		Address:    c.Address,
 		HttpClient: &http.Client{Timeout: c.PollInterval},
