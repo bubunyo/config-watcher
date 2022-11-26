@@ -11,13 +11,16 @@ import (
 
 type Config struct {
 	common.Config
+
+	// Address is the address of the Consul server
 	Address string
 }
 
-type Consul struct {
+type consul struct {
 	kv *api.KV
 }
 
+// NewWatcher returns a new Watcher for watching keys on consul
 func NewWatcher(c *Config) (internal.Watcher, error) {
 	client, err := api.NewClient(&api.Config{
 		Address:    c.Address,
@@ -27,7 +30,7 @@ func NewWatcher(c *Config) (internal.Watcher, error) {
 		return nil, err
 	}
 
-	consul := &Consul{kv: client.KV()}
+	consul := &consul{kv: client.KV()}
 
 	wi, err := internal.NewWatcher("consul", &c.Config, consul)
 	if err != nil {
@@ -37,7 +40,7 @@ func NewWatcher(c *Config) (internal.Watcher, error) {
 	return wi, nil
 }
 
-func (c Consul) Get(_ context.Context, key string) ([]byte, error) {
+func (c consul) Get(_ context.Context, key string) ([]byte, error) {
 	pair, _, err := c.kv.Get(key, nil)
 	if err != nil {
 		return nil, err

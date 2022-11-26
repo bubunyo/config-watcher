@@ -14,6 +14,7 @@ import (
 	"github.com/bubunyo/config-watcher/common"
 )
 
+// Store is an interface of all functionalities a store must complete
 type Store interface {
 	Get(context.Context, string) ([]byte, error)
 }
@@ -47,6 +48,8 @@ type Watch struct {
 	logger *log.Logger
 }
 
+// NewWatcher accepts a store name t, watcher configurations, and a store
+// and returns a new watch with all watcher mechanisms.
 func NewWatcher(t string, config *common.Config, store Store) (*Watch, error) {
 	if config.PollInterval <= 0 {
 		return nil, errors.New("config-watcher: poll interval cannot be 0")
@@ -70,6 +73,12 @@ func NewWatcher(t string, config *common.Config, store Store) (*Watch, error) {
 	return w, nil
 }
 
+// Watch return s a <-chan []byte on which all new detected configuration
+// changes are pushed.
+// Watch the initial value for watch will always be nil, if the key on the associated
+// store does not exist or is empty.
+// Watch can be called multiple times on the same key at different places,
+// or on multiple different keys on the same store.
 func (w *Watch) Watch(ctx context.Context, key string) <-chan []byte {
 	w.watchTypeM.Lock()
 	defer w.watchTypeM.Unlock()
@@ -135,7 +144,16 @@ func different(i1, i2 []byte) bool {
 	return !bytes.Equal(i1, i2)
 }
 
+// Close closes all running watchers and returns an error if a CloseTimeout is exceeded.
+// if the CloseTimeout is zero, the close method waits indefinitely for the close
+// operation to complete
 func (w *Watch) Close() error {
+	if w.config.CloseTimeout == 0 {
+		// wait indefinitely
+		w.wg.Wait()
+		return nil
+	}
+
 	c := make(chan struct{})
 	t := time.NewTimer(w.config.CloseTimeout)
 	defer func() {
@@ -147,8 +165,10 @@ func (w *Watch) Close() error {
 		defer close(c)
 		w.wg.Wait()
 	}()
+	// signal close for all runners
 	close(w.closeChan)
 	select {
+	// wait for all w.wg.waits to complete
 	case <-c:
 		return nil
 	case <-t.C:
