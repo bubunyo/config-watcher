@@ -31,9 +31,12 @@ func TestWatcher_NilFirstValue(t *testing.T) {
 	res := string(<-tw.Watch(context.Background(), "foo"))
 	assert.Empty(t, res)
 
+	res2 := string(<-tw.Watch(context.Background(), "foo"))
+	assert.Empty(t, res2)
+
 	assert.Len(t, tw.watchStore, 1)
 	ws := tw.watchStore["foo"]
-	assert.Len(t, ws.sig, 1)
+	assert.Len(t, ws.sig, 2)
 	assert.Nil(t, ws.lastValue)
 	assert.True(t, ws.lastValueSet)
 }
@@ -59,13 +62,23 @@ func TestWatcher_MultipleWatchSameKey(t *testing.T) {
 	tw, store := NewTestWatcher(t)
 	store.Set("foo", []byte("bar"))
 
-	ch1 := tw.Watch(context.Background(), "foo")
-	ch2 := tw.Watch(context.Background(), "foo")
-	assert.Equal(t, "bar", string(<-ch1))
-	assert.Equal(t, "bar", string(<-ch2))
+	sig := make(chan struct{})
+
+	watchKey := func() {
+		for range tw.Watch(context.Background(), "foo") {
+			sig <- struct{}{}
+		}
+	}
+
+	go watchKey()
+	<-sig
+	go watchKey()
+	<-sig
+
 	store.Set("foo", []byte("world"))
-	assert.Equal(t, "world", string(<-ch1))
-	assert.Equal(t, "world", string(<-ch2))
+
+	<-sig
+	<-sig
 
 	assert.Len(t, tw.watchStore, 1)
 	ws := tw.watchStore["foo"]
@@ -87,6 +100,51 @@ func TestWatcher_MultipleKeys(t *testing.T) {
 	assert.Len(t, tw.watchStore, 2)
 	assert.Len(t, tw.watchStore["foo"].sig, 1)
 	assert.Len(t, tw.watchStore["bar"].sig, 1)
+}
+
+type s common.Stats
+
+func (ss *s) Collect(stats common.Stats) {
+	*ss = (s)(stats)
+}
+
+func TestWatcher_Stats(t *testing.T) {
+	tw, store := NewTestWatcher(t)
+
+	sig := make(chan struct{})
+
+	watch := func(w <-chan []byte) {
+		for range w {
+			sig <- struct{}{}
+		}
+	}
+
+	go watch(tw.Watch(context.Background(), "foo"))
+	go watch(tw.Watch(context.Background(), "bar"))
+	go watch(tw.Watch(context.Background(), "bar"))
+
+	for i := 0; i < 3; i++ {
+		<-sig
+	}
+
+	store.Set("bar", []byte("chuck"))
+
+	for i := 0; i < 3; i++ {
+		<-sig
+	}
+
+	_ = tw.Close()
+	s := &s{}
+	tw.CollectStats(s)
+
+	assert.Equal(t, int64(3), s.KeyWatchCount)
+	assert.Equal(t, int64(2), s.KeyNewWatchCount)
+	assert.Equal(t, int64(3), s.KeyNewValueDetected)
+	assert.Equal(t, float64(1), s.KeyGetDuration.Quantile(1))
+
+	assert.Equal(t, int64(0), s.WatcherClosedByContext)
+	assert.Equal(t, int64(2), s.WatcherClosedByWatcherClose)
+	assert.Equal(t, float64(1000), s.WatcherCloseDuration.Quantile(1))
 }
 
 func TestWatcher_Close(t *testing.T) {
@@ -113,4 +171,18 @@ func TestWatcher_CloseWithContext(t *testing.T) {
 		assert.False(t, ok)
 	}()
 	cancel()
+}
+
+func TestWatcher_CloseTimeout(t *testing.T) {
+	tw, _ := NewTestWatcher(t)
+
+	watcher := func(w <-chan []byte) {
+		<-w
+	}
+	go watcher(tw.Watch(context.Background(), "foo"))
+	go watcher(tw.Watch(context.Background(), "foo"))
+
+	err := tw.Close()
+	assert.Error(t, err)
+	assert.Equal(t, "config-watcher: close timeout", err.Error())
 }

@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+type exporter struct {
+}
+
+func (e exporter) Collect(stats common.Stats) {
+}
+
 func TestConsulWatcher(t *testing.T) {
 	t.Skip()
 	config := &consul.Config{
@@ -22,6 +28,10 @@ func TestConsulWatcher(t *testing.T) {
 
 	cw, _ := consul.NewWatcher(config)
 	wg := sync.WaitGroup{}
+
+	e := exporter{}
+
+	cw.CollectStats(e)
 
 	wg.Add(2)
 

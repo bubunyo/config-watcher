@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bubunyo/config-watcher/common"
@@ -23,6 +24,7 @@ type Watcher interface {
 	io.Closer
 
 	Watch(context.Context, string) <-chan []byte
+	CollectStats(common.StatsCollector)
 }
 
 type watchStore struct {
@@ -46,6 +48,8 @@ type Watch struct {
 	httpClient *http.Client
 
 	logger *log.Logger
+
+	stats common.Stats
 }
 
 // NewWatcher accepts a store name t, watcher configurations, and a store
@@ -65,6 +69,7 @@ func NewWatcher(t string, config *common.Config, store Store) (*Watch, error) {
 		wg:         &sync.WaitGroup{},
 		closeChan:  make(chan struct{}),
 		logger:     log.Default(),
+		stats:      common.Stats{},
 	}
 	w.logger.SetPrefix(fmt.Sprintf("config-watcher[%s] ", t))
 	w.httpClient = &http.Client{
@@ -80,19 +85,24 @@ func NewWatcher(t string, config *common.Config, store Store) (*Watch, error) {
 // Watch can be called multiple times on the same key at different places,
 // or on multiple different keys on the same store.
 func (w *Watch) Watch(ctx context.Context, key string) <-chan []byte {
+	inc(&w.stats.KeyWatchCount)
 	w.watchTypeM.Lock()
 	defer w.watchTypeM.Unlock()
 	w.wg.Add(1)
 	sig := make(chan []byte, 0)
 	ws, ok := w.watchStore[key]
 	if ok {
+		go func() {
+			// send the last value on the signal
+			sig <- ws.lastValue
+		}()
 		ws.sig = append(ws.sig, sig)
 	} else {
+		inc(&w.stats.KeyNewWatchCount)
 		ws = &watchStore{
 			key: key,
-			sig: make([]chan []byte, 0, 1),
+			sig: []chan []byte{sig},
 		}
-		ws.sig = append(ws.sig, sig)
 		w.watchStore[key] = ws
 		go w.runWatcher(ctx, ws)
 	}
@@ -100,8 +110,15 @@ func (w *Watch) Watch(ctx context.Context, key string) <-chan []byte {
 }
 
 func (w *Watch) runWatcher(ctx context.Context, ws *watchStore) {
-	ticker := time.NewTicker(w.config.PollInterval)
+	exec := func() {
+		if err := w.watch(ctx, ws); err != nil {
+			w.logger.Print("watch-key:", ws.key, " watch error:", err.Error())
+		}
+	}
+	// retrieve initial values
+	exec()
 
+	ticker := time.NewTicker(w.config.PollInterval)
 	defer func() {
 		ticker.Stop()
 		w.wg.Done()
@@ -110,13 +127,13 @@ func (w *Watch) runWatcher(ctx context.Context, ws *watchStore) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := w.watch(ctx, ws); err != nil {
-				w.logger.Print("watch-key:", ws.key, " watch error:", err.Error())
-			}
+			exec()
 		case <-ctx.Done():
 			w.logger.Print("watch-key:", ws.key, " context cancelled")
+			inc(&w.stats.WatcherClosedByContext)
 			return
 		case <-w.closeChan:
+			inc(&w.stats.WatcherClosedByWatcherClose)
 			w.logger.Print("watch-key:", ws.key, " watcher closed")
 			return
 		}
@@ -124,17 +141,28 @@ func (w *Watch) runWatcher(ctx context.Context, ws *watchStore) {
 }
 
 func (w *Watch) watch(ctx context.Context, ws *watchStore) error {
+	defer func(t time.Time) {
+		w.stats.KeyGetDuration.Update(float64(time.Since(t).Milliseconds()))
+	}(time.Now())
+
 	value, err := w.store.Get(ctx, ws.key)
 	if err != nil {
 		return err
 	}
-	if !ws.lastValueSet || ws.lastValue == nil || different(ws.lastValue, value) {
+	diff := different(ws.lastValue, value)
+	if !diff {
+		inc(&w.stats.KeyNewValueDetected)
+	}
+	if !ws.lastValueSet || ws.lastValue == nil || diff {
 		ws.lastValue = value
 		if !ws.lastValueSet {
 			ws.lastValueSet = true
 		}
 		for _, s := range ws.sig {
-			s <- ws.lastValue
+			// send asynchronously to not block other none consuming chanls
+			go func() {
+				s <- ws.lastValue
+			}()
 		}
 	}
 	return nil
@@ -144,10 +172,22 @@ func different(i1, i2 []byte) bool {
 	return !bytes.Equal(i1, i2)
 }
 
+func (w *Watch) CollectStats(exporter common.StatsCollector) {
+	exporter.Collect(w.stats)
+}
+
+func inc(c *int64) {
+	atomic.AddInt64(c, 1)
+}
+
 // Close closes all running watchers and returns an error if a CloseTimeout is exceeded.
 // if the CloseTimeout is zero, the close method waits indefinitely for the close
 // operation to complete
 func (w *Watch) Close() error {
+	defer func(t time.Time) {
+		w.stats.WatcherCloseDuration.Update(float64(time.Since(t).Milliseconds()))
+	}(time.Now())
+
 	if w.config.CloseTimeout == 0 {
 		// wait indefinitely
 		w.wg.Wait()
@@ -156,11 +196,6 @@ func (w *Watch) Close() error {
 
 	c := make(chan struct{})
 	t := time.NewTimer(w.config.CloseTimeout)
-	defer func() {
-		if !t.Stop() {
-			<-t.C
-		}
-	}()
 	go func() {
 		defer close(c)
 		w.wg.Wait()
@@ -168,10 +203,12 @@ func (w *Watch) Close() error {
 	// signal close for all runners
 	close(w.closeChan)
 	select {
-	// wait for all w.wg.waits to complete
 	case <-c:
+		if !t.Stop() {
+			<-t.C
+		}
 		return nil
 	case <-t.C:
-		return errors.New("config-watcher[consul]: close timeout") // timed out
+		return errors.New("config-watcher: close timeout") // timed out
 	}
 }

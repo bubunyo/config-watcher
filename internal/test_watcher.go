@@ -16,6 +16,8 @@ type TestStore struct {
 }
 
 func (t TestStore) Get(_ context.Context, key string) ([]byte, error) {
+	// simulate a network call
+	time.Sleep(1 * time.Millisecond)
 	if len(key) == 0 {
 		t.t.Fatalf("key can not be empty")
 	}
