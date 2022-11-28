@@ -140,11 +140,11 @@ func TestWatcher_Stats(t *testing.T) {
 	assert.Equal(t, int64(3), s.KeyWatchCount)
 	assert.Equal(t, int64(2), s.KeyNewWatchCount)
 	assert.Equal(t, int64(3), s.KeyNewValueDetected)
-	assert.Equal(t, float64(1), s.KeyGetDuration.Quantile(1))
+	assert.True(t, s.KeyGetDuration.Quantile(1) >= float64(1))
 
 	assert.Equal(t, int64(0), s.WatcherClosedByContext)
 	assert.Equal(t, int64(2), s.WatcherClosedByWatcherClose)
-	assert.Equal(t, float64(1000), s.WatcherCloseDuration.Quantile(1))
+	assert.True(t, s.WatcherCloseDuration.Quantile(1) >= float64(1000))
 }
 
 func TestWatcher_Close(t *testing.T) {
