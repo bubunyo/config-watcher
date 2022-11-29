@@ -5,6 +5,8 @@
 *.so
 *.dylib
 .idea
+cron.sh
+sample_response.json
 
 # Test binary, built with `go test -c`
 *.test
